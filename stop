@@ -1,0 +1,31 @@
+# vim: ts=4 syntax=sh
+# Note: this code is inserted into a bash function by Shorewall, thus there's no usual set -e, etc.
+
+#
+# This is a Shorewall 'stop' hook script, responsible for saving kubernetes-specific chains
+# to /etc/shorewall/k8s_rules, so they can be restored when Shorewall rules are reloaded.
+#
+# Node: jumps from INPUT,OUTPUT,etc. chains are not saved, but recreated by the restore script.
+#
+# The idea comes from https://blog.discourse.org/2015/11/shorewalldocker-two-great-tastes-that-taste-great-together/#
+#
+
+RULE_FILE=/etc/shorewall/k8s_rules
+
+# KUBE-SERVICES chain is there? then k8s is up
+if iptables -t filter -L KUBE-SERVICES >/dev/null 2>&1; then
+	# dump chains in the nat table
+	echo '*nat' > $RULE_FILE
+	# due to dynamic naming we have to resort to greping
+	iptables -t nat -S | grep -- '-[AN] KUBE-' >> $RULE_FILE
+	# Assuming ip-masq-agent is deployed, you may want to disable it
+	iptables -t nat -S 'IP-MASQ-AGENT' >> $RULE_FILE
+	echo 'COMMIT' >> $RULE_FILE
+
+	# filter table
+	echo '*filter' >> $RULE_FILE
+	# due to dynamic naming we have to resort to greping
+	iptables -t filter -S | grep -- '-[AN] KUBE-' >> $RULE_FILE
+	echo 'COMMIT' >> $RULE_FILE
+
+fi
